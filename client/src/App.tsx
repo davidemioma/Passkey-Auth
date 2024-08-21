@@ -5,7 +5,10 @@ import axios, { AxiosError } from "axios";
 import { Input } from "./components/ui/input";
 import { Button } from "./components/ui/button";
 import { useMutation } from "@tanstack/react-query";
-import { startRegistration } from "@simplewebauthn/browser";
+import {
+  startRegistration,
+  startAuthentication,
+} from "@simplewebauthn/browser";
 
 const App = () => {
   const [email, setEmail] = useState("");
@@ -21,35 +24,13 @@ const App = () => {
 
       const options = await initialResponse.data;
 
-      console.log(options);
-
       // Create passkey
       const registrationJSON = await startRegistration(options);
-
-      // This is what startRegistration function does.
-      // const data = await navigator.credentials.create({
-      //   publicKey: {
-      //     challenge: new Uint8Array([0, 1, 2, 3, 4, 5, 6]),
-      //     rp: {
-      //       name: "Finger Print Tutorial",
-      //     },
-      //     user: {
-      //       id: new Uint8Array(16),
-      //       name: email,
-      //       displayName: email,
-      //     },
-      //     pubKeyCredParams: [
-      //       { type: "public-key", alg: -7 },
-      //       { type: "public-key", alg: -8 },
-      //       { type: "public-key", alg: -257 },
-      //     ],
-      //   },
-      // });
 
       // Save passKey to DB
       const verifyResponse = await axios.post(
         `/api/verify-registration`,
-        { registrationJSON },
+        { ...registrationJSON },
         {
           withCredentials: true,
         }
@@ -78,21 +59,36 @@ const App = () => {
   const { mutate: logIn, isPending: loggingIn } = useMutation({
     mutationKey: ["log-in"],
     mutationFn: async () => {
-      const data = await navigator.credentials.get({
-        publicKey: {
-          challenge: new Uint8Array([0, 1, 2, 3, 4, 5, 6]),
-          allowCredentials: [
-            // {
-            //   type: "public-key",
-            //   id: "",
-            // },
-          ],
-        },
+      // Get challenge from the server
+      const initialResponse = await axios.get(`/api/init-auth?email=${email}`, {
+        withCredentials: true,
       });
 
-      console.log(data);
+      const options = await initialResponse.data;
+
+      // Get PassKey
+      const authJSON = await startAuthentication(options);
+
+      // Verify PassKey with DB
+      const verifyResponse = await axios.post(
+        `/api/verify-auth`,
+        { ...authJSON },
+        {
+          withCredentials: true,
+        }
+      );
+
+      return verifyResponse;
     },
-    onSuccess: () => {},
+    onSuccess: (res) => {
+      const verifiedData = res.data;
+
+      if (verifiedData.verified) {
+        toast.success(`Successfull logged in ${email}`);
+      } else {
+        toast.error("Failed to log in!");
+      }
+    },
     onError: (err) => {
       if (err instanceof AxiosError) {
         toast.error(err.response?.data);

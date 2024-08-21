@@ -7,8 +7,6 @@ import type {
 export type PassKey = {
   id: Base64URLString;
   publicKey: Uint8Array;
-  user: User;
-  webauthnUserID: Base64URLString;
   counter: number;
   deviceType: CredentialDeviceType;
   backedUp: boolean;
